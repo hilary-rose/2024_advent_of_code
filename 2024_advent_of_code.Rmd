@@ -1,0 +1,134 @@
+---
+title: "2024 Advent of Code"
+output: html_document
+date: "2024-11-30"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(janitor)
+library(here)
+library(tidylog)
+`%notin%` <- negate(`%in%`)
+```
+
+## Day 1 - Places of Historical Significance
+
+### Part 1
+
+```{r}
+
+#arrange both lists from lowest number to highest number, then get the absolute difference between the numbers on each row. Add these up for the answer.
+
+day1_locations <- read_delim(here("data/day1_input.txt"), col_names = c("list1", "list2"), delim = "   ")
+
+day1_locations_list1 <- day1_locations %>%
+  select(list1) %>%
+  arrange(list1)
+
+day1_locations_list2 <- day1_locations %>%
+  select(list2) %>%
+  arrange(list2)
+
+day1_locations <- day1_locations_list1 %>%
+  bind_cols(day1_locations_list2)
+
+day1_locations %>%
+  mutate(diff = abs(list1 - list2)) %>%
+  summarize(total_diff = sum(diff))
+
+```
+
+### Part 2
+```{r}
+
+#Get a similarity score for each list by finding the number of times each number in list one appears in list two, and then multiply that number by the number of times it occurs in list 2. Add all these up to get the answer.
+
+similarity_scores <- tibble(similarity = numeric())
+
+for (i in 1:nrow(day1_locations_list1)) {
+  number <- day1_locations_list1$list1[[i]]
+  times_in_list2 <- day1_locations_list2 %>%
+    dplyr::filter(list2 == number) %>%
+    nrow()
+  similarity_score = tibble(similarity = number*times_in_list2)
+  similarity_scores <- similarity_scores %>%
+    bind_rows(similarity_score)
+}
+
+similarity_scores %>%
+  summarize(overall_similarity = sum(similarity))
+
+```
+
+
+## Day 2
+
+### Part 1
+
+```{r}
+
+```
+
+### Part 2
+```{r}
+
+```
+
+
+## Day 3
+
+### Part 1
+
+```{r}
+
+```
+
+### Part 2
+```{r}
+
+```
+
+
+## Day 4
+
+### Part 1
+
+```{r}
+
+```
+
+### Part 2
+```{r}
+
+```
+
+
+## Day 5
+
+### Part 1
+
+```{r}
+
+```
+
+### Part 2
+```{r}
+
+```
+
+
+## Day 6
+
+### Part 1
+
+```{r}
+
+```
+
+### Part 2
+```{r}
+
+```
+
