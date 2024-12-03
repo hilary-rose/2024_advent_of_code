@@ -211,7 +211,7 @@ sum(products)
 
 ### Part 2
 ```{r}
-# Similary to day 1, but have to remove any mul(x,y) instructions that come after the instruction don't() up to a new instruction do()
+# Similar to day 1, but have to remove any mul(x,y) instructions that come after the instruction don't() up to a new instruction do()
 
 #get all rows into one for regex
 corrupted <- glue::glue_collapse(day3_corrupted$messy)
