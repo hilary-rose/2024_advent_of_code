@@ -63,16 +63,106 @@ similarity_scores %>%
 ```
 
 
-## Day 2
+## Day 2 - Red Nosed Reports
 
 ### Part 1
 
 ```{r}
 
+#each report must have numbers in increasing or decreasing order, and no greater than 3 more/less than the number before for the report to be considered safe. Number of safe reports is the answer.
+
+temp <- file(here("data/day2_input.txt"))
+day2_reports <- strsplit(readLines(temp), " ")
+day2_reports <- lapply(day2_reports, as.numeric)
+rm(temp)
+
+safe_count <- 0
+safe_list <- c()
+unsafe_count <- 0
+unsafe_list <- c()
+
+for (i in 1:length(day2_reports)) {
+  report <- day2_reports[[i]]
+  if (is.unsorted(report, strictly = T) & is.unsorted(rev(report), strictly = T)) {
+    unsafe_count <- unsafe_count + 1
+    unsafe_list <- c(unsafe_list, i)
+    print(paste("report", i, "is unsafe"))
+    next
+  } else {
+  for (j in 2:length(report)) {
+    curr_element <- report[[j]]
+    prev_element <- report[[j-1]]
+    
+    if (abs(curr_element - prev_element) <= 3) {
+      if (j == length(report)) {
+        safe_count <- safe_count + 1
+        safe_list <- c(safe_list, i)
+        print(paste("report", i, "is safe"))
+      }
+    } else {
+      unsafe_count <- unsafe_count + 1
+      unsafe_list <- c(unsafe_list, i)
+      print(paste("report", i, "is unsafe"))
+      break
+      }
+    }
+  }
+}
+
+safe_count
+
 ```
 
 ### Part 2
 ```{r}
+
+#Same as Part 1, except now if only one element in a report makes it unsafe, then it can count as safe. Added unsafe_list to the above code to isolate the problematic reports... might make sense to do the whole problem in one for loop, but for now I'll do a second thing here
+
+#Get list of unsafe reports
+unsafe_reports <- day2_reports[unsafe_list]
+
+#Make some functions to check for offenses
+check_diff_too_big <- function(vec) {
+  if(length(diff(vec)[abs(diff(vec)) > 3])) {
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+}
+
+check_out_of_order <- function(vec) {
+  if(is.unsorted(vec, strictly = T) & is.unsorted(rev(vec), strictly = T)) {
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+}
+
+
+new_safe_count <- safe_count
+new_unsafe_count <- unsafe_count
+
+for (i in 1:length(unsafe_reports)) {
+    vec <- unsafe_reports[[i]]
+    for (j in 1:length(vec)) {
+      new_vec <- vec[-j]
+      
+      if(check_diff_too_big(new_vec) == TRUE) {
+        next
+        } else if (check_out_of_order(new_vec) == TRUE) {
+          next
+          } else {
+            #If above two are not true, report can be made safe and break out of J loop
+            original_index <- which(day2_reports %in% unsafe_reports[i])
+            print(paste("Report", original_index, ":", unsafe_reports[i], "can be made safe"))
+            new_safe_count <- new_safe_count + 1
+            new_unsafe_count <- new_unsafe_count - 1
+            break
+          }
+      }
+}
+
+new_safe_count
 
 ```
 
@@ -131,4 +221,12 @@ similarity_scores %>%
 ```{r}
 
 ```
+
+
+
+```{r garbage}
+#put code that isn't working here if you think you might need to come back to old ideas
+```
+
+
 
