@@ -189,6 +189,24 @@ mul_products <- str_extract_all(day3_corrupted$messy, "mul\\(\\d{1,3}\\,\\d{1,3}
 mul_products %>% 
   summarize(total = sum(product))
 
+#------------------------------------------------------Possibly a better/faster way to do it:
+
+day3_corrupted_text <- read_tsv(here("data/day3_input.txt"),
+                           col_names = "messy") %>%
+  glue::glue_collapse(.$messy) 
+
+mul1 <- str_extract_all(day3_corrupted_text, "(?<=mul\\()\\d{1,3}(?=\\,\\d{1,3}\\))") %>%
+  unlist() %>%
+  parse_number(.)
+
+mul2 <- str_extract_all(day3_corrupted_text, "(?<=mul\\(\\d{1,3}\\,)\\d{1,3}(?=\\))") %>%
+  unlist() %>%
+  parse_number(.)
+
+products <- mul1*mul2
+
+sum(products)
+
 ```
 
 ### Part 2
@@ -236,6 +254,22 @@ for (i in 1:length(mul_locations)) {
 
 mul_products %>%
   filter(remove == FALSE) %>%
+  summarize(total = sum(product))
+
+#---------------------------------------------------A better/faster way to do it:
+#extract only the do calls, don't calls, and mul calls, then filter out the don'ts
+
+
+str_extract_all(day3_corrupted_text, "((?<=mul\\()\\d{1,3}\\,\\d{1,3}(?=\\)))|(do\\(\\))|(don't\\(\\))") %>%
+  unlist() %>% 
+  as_tibble() %>%
+  mutate(do_dont = case_when(row_number() == 1 ~ "do()", 
+                             TRUE ~ str_extract(value, "d.*"))) %>% 
+  fill(do_dont, .direction = "down") %>% 
+  filter(do_dont == "do()" & value != "do()") %>% 
+  separate(value, into = c("mul1", "mul2"), sep = ",") %>% 
+  mutate(across(c(mul1, mul2), as.numeric)) %>% 
+  mutate(product = mul1*mul2) %>% 
   summarize(total = sum(product))
 
 ```
