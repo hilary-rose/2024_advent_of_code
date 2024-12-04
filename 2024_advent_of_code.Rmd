@@ -275,16 +275,192 @@ str_extract_all(day3_corrupted_text, "((?<=mul\\()\\d{1,3}\\,\\d{1,3}(?=\\)))|(d
 ```
 
 
-## Day 4
+## Day 4 - Ceres Word Search
 
 ### Part 1
 
 ```{r}
 
+#OOPS did it wrong the first time... put that code in the garbage chunk in case any of it is useful moving forward
+
+#the REAL instructions are to find XMAS forward, backward or strict diagonal within the word search
+
+#---------------------------------------Okay, trying again
+
+day4_xmas <- read_tsv(here("data/day4_input.txt"), col_names = F) %>%
+  mutate(tmp = strsplit(X1, "")) %>%
+    unnest() %>%
+    group_by(X1) %>%
+    mutate(n = 1:n()) %>%
+    pivot_wider(names_from = "n", values_from = "tmp") %>%
+    ungroup() %>%
+    select(-X1) %>%
+  as.matrix(.)
+
+# word search is 140 x 140
+
+#From each X, make words from all possible orientations, then check if they are XMAS. Have to pad the matrix more to avoid going out of bounds.
+
+day4_xmas_padded <- rbind(rep(NA, ncol(day4_xmas)+6), 
+                          rep(NA, ncol(day4_xmas)+6),
+                          rep(NA, ncol(day4_xmas)+6),
+                          cbind(rep(NA, nrow(day4_xmas)),
+                                rep(NA, nrow(day4_xmas)), 
+                                rep(NA, nrow(day4_xmas)), 
+                                day4_xmas, 
+                                rep(NA, nrow(day4_xmas)),
+                                rep(NA, nrow(day4_xmas)),
+                                rep(NA, nrow(day4_xmas))),
+                          rep(NA, ncol(day4_xmas)+6),
+                          rep(NA, ncol(day4_xmas)+6),
+                          rep(NA, ncol(day4_xmas)+6)) 
+
+
+x_locations <- which(day4_xmas_padded == "X", arr.ind = TRUE) #3668 Xes
+
+find_xmas <- function(wrdsrch, x_row, x_col) {
+  possibilities <- c(
+    #N
+    glue::glue_collapse(na.omit(as.vector(c(
+      "X", wrdsrch[x_row - 1, x_col], wrdsrch[x_row - 2, x_col], wrdsrch[x_row - 3, x_col])))),
+    #NE
+    glue::glue_collapse(na.omit(as.vector(c(
+      "X", wrdsrch[x_row - 1, x_col + 1], wrdsrch[x_row - 2, x_col + 2], wrdsrch[x_row - 3, x_col +3])))),
+    #E
+    glue::glue_collapse(na.omit(as.vector(c(
+      "X", wrdsrch[x_row, x_col + 1], wrdsrch[x_row, x_col + 2], wrdsrch[x_row, x_col + 3])))),
+    #SE
+    glue::glue_collapse(na.omit(as.vector(c(
+      "X", wrdsrch[x_row + 1, x_col +1], wrdsrch[x_row + 2, x_col + 2], wrdsrch[x_row + 3, x_col +3])))),
+    #S
+    glue::glue_collapse(na.omit(as.vector(c(
+      "X", wrdsrch[x_row + 1, x_col], wrdsrch[x_row + 2, x_col], wrdsrch[x_row + 3, x_col])))),
+    #SW
+    glue::glue_collapse(na.omit(as.vector(c(
+      "X", wrdsrch[x_row + 1, x_col -1], wrdsrch[x_row + 2, x_col -2], wrdsrch[x_row + 3, x_col - 3])))),
+    #W
+    glue::glue_collapse(na.omit(as.vector(c(
+      "X", wrdsrch[x_row, x_col - 1], wrdsrch[x_row, x_col - 2], wrdsrch[x_row, x_col - 3])))),
+    #NW
+    glue::glue_collapse(na.omit(as.vector(c(
+      "X", wrdsrch[x_row - 1, x_col -1], wrdsrch[x_row - 2, x_col -2], wrdsrch[x_row - 3, x_col -3]))))
+  )
+  #print(possibilities)
+  matches <- possibilities[possibilities == "XMAS"]
+  return(length(matches))
+}
+
+x_locations <- which(day4_xmas_padded == "X", arr.ind = TRUE) #3668 Xes
+
+xmas_count <- 0
+
+for (i in 1:nrow(x_locations)) {
+  curr_x <- x_locations[i,]
+  num_matches <- find_xmas(day4_xmas_padded, curr_x[[1]], curr_x[[2]])
+  xmas_count <- xmas_count + num_matches
+  
+}
+
+
 ```
 
 ### Part 2
 ```{r}
+# Similar to day 1, but have to remove any mul(x,y) instructions that come after the instruction don't() up to a new instruction do()
+
+#get all rows into one for regex
+corrupted <- glue::glue_collapse(day3_corrupted$messy)
+#locate end of strings which is index 2 (aka beginning of good or bad stretch)
+do_locations <- str_locate_all(corrupted, "do\\(\\)")[[1]][,2]
+dont_locations <- str_locate_all(corrupted, "don't\\(\\)")[[1]][,2]
+
+#get end locations for the DO and DONT calls (second half of unlisted result from str_extract)
+
+do_ranges <- tibble(locations = c(1, do_locations,dont_locations), #the 1 is for the initial "do" state
+       type = c(rep("do", length(do_locations) + 1),
+                rep("dont", length(dont_locations)))) %>%
+  arrange(locations) %>%
+  mutate(type_num_id = data.table::rleid(type)) %>%
+  group_by(type_num_id) %>%
+  slice_head() %>% #if 2 dos or don'ts in a row, no need for second one (just continues the same instruction)
+  ungroup() %>% 
+  #now everything is in do - dont order so can pivot to get the ranges
+  select(-type_num_id) %>%
+  mutate(row_id = rep(1:(nrow(.)/2), each = 2)) %>%
+  pivot_wider(names_from = type, values_from = locations) %>%
+  select(-row_id)
+  
+#now get mul locations (again, just need either the start or end point, not both, since we are finding the full string which will automatically be between the ranges)
+mul_locations <- str_locate_all(corrupted, "mul\\(\\d{1,3}\\,\\d{1,3}\\)")[[1]][,2]
+mul_products <- mul_products %>%
+  mutate(remove = FALSE)
+
+for (i in 1:length(mul_locations)) {
+  #for each mul location, check if it follows a do or a don't
+  location <- mul_locations[[i]]
+  in_range <- do_ranges %>%
+    dplyr::filter(location >= do & location <= dont)
+  if (nrow(in_range) > 0) {
+    next
+  } else {
+    mul_products$remove[[i]] <- TRUE
+  }
+}
+
+mul_products %>%
+  filter(remove == FALSE) %>%
+  summarize(total = sum(product))
+
+#---------------------------------------------------A better/faster way to do it:
+#extract only the do calls, don't calls, and mul calls, then filter out the don'ts
+
+
+str_extract_all(day3_corrupted_text, "((?<=mul\\()\\d{1,3}\\,\\d{1,3}(?=\\)))|(do\\(\\))|(don't\\(\\))") %>%
+  unlist() %>% 
+  as_tibble() %>%
+  mutate(do_dont = case_when(row_number() == 1 ~ "do()", 
+                             TRUE ~ str_extract(value, "d.*"))) %>% 
+  fill(do_dont, .direction = "down") %>% 
+  filter(do_dont == "do()" & value != "do()") %>% 
+  separate(value, into = c("mul1", "mul2"), sep = ",") %>% 
+  mutate(across(c(mul1, mul2), as.numeric)) %>% 
+  mutate(product = mul1*mul2) %>% 
+  summarize(total = sum(product))
+
+# New rules: find two MAS on the diagonal crossing... so now need to find A locations and check for diagonal M and S (somehow seems easier??)
+
+day4_xmas_padded <- rbind(NA, cbind(NA, day4_xmas, NA), NA) #pad the matrix with NAs so the finding neighbours function works
+
+find_x_mas <- function(wrdsrch, a_row, a_col) {
+  possibilities <- c(
+    #first diagonal
+    glue::glue_collapse(na.omit(as.vector(c(
+      wrdsrch[a_row - 1, a_col - 1], "A", wrdsrch[a_row + 1, a_col + 1])))),
+    #second diagonal
+    glue::glue_collapse(na.omit(as.vector(c(
+      wrdsrch[a_row + 1, a_col - 1], "A", wrdsrch[a_row - 1, a_col +
+                                                    1]))))
+  )
+  #print(possibilities)
+  matches <- possibilities[possibilities %in% c("MAS", "SAM")]
+  #Need full X shape to count as 1, so if we have 2 matches, return 1, otherwise 0
+  if (length(matches) == 2) {
+    return(1)
+  } else {
+    return(0)
+  }
+}
+
+a_locations <- which(day4_xmas_padded == "A", arr.ind = TRUE) #3668 Xes
+
+x_mas_count <- 0
+
+for (i in 1:nrow(a_locations)) {
+  curr_a <- a_locations[i,]
+  num_matches <- find_x_mas(day4_xmas_padded, curr_a[[1]], curr_a[[2]])
+  x_mas_count <- x_mas_count + num_matches
+  
+}
 
 ```
 
@@ -320,6 +496,88 @@ str_extract_all(day3_corrupted_text, "((?<=mul\\()\\d{1,3}\\,\\d{1,3}(?=\\)))|(d
 
 ```{r garbage}
 #put code that isn't working here if you think you might need to come back to old ideas
+
+
+# Must find all instances of "XMAS" in the word search, in which any of the adjacent letters can occur in any direction (up, down, diagonal). 
+
+#Idea 1: get indices of all Xes so only have to iterate from those starting points, instead of checking every element. Then write a function to check all adjacent letters for M, then A, then S. For each X, count how many XMASes there are.
+
+#HAHAHA I misunderstood the puzzle... the diagonals have to be fully diagonal, not zigzagging. Ugh. Keep this code anyway in case that's part 2 lol
+
+day4_xmas <- read_tsv(here("data/day4_input.txt"), col_names = F) %>%
+  mutate(tmp = strsplit(X1, "")) %>%
+    unnest() %>%
+    group_by(X1) %>%
+    mutate(n = 1:n()) %>%
+    pivot_wider(names_from = "n", values_from = "tmp") %>%
+    ungroup() %>%
+    select(-X1) %>%
+  as.matrix(.)
+
+day4_xmas_padded <- rbind(NA, cbind(NA, day4_xmas, NA), NA) #pad the matrix with NAs so the finding neighbours function works
+
+# word search is 140 x 140
+
+x_locations <- which(day4_xmas_padded == "X", arr.ind = TRUE) #3668 Xes
+
+find_neighbours <- function(letter_row, letter_col, wrdsrch, letter_filter = ".") {
+  
+  neigh <- c(N  = as.vector(wrdsrch[letter_row - 1, letter_col]),
+              NE = as.vector(wrdsrch[letter_row - 1, letter_col + 1]),
+              E  = as.vector(wrdsrch[letter_row, letter_col + 1]),
+              SE = as.vector(wrdsrch[letter_row + 1, letter_col + 1]),
+              S  = as.vector(wrdsrch[letter_row + 1, letter_col    ]),
+              SW = as.vector(wrdsrch[letter_row + 1, letter_col - 1]),
+              W  = as.vector(wrdsrch[letter_row, letter_col - 1]),
+              NW = as.vector(wrdsrch[letter_row - 1, letter_col - 1]))
+  
+  neigh_locs <- list(N  = c(letter_row - 1, letter_col),
+              NE = c(letter_row - 1, letter_col + 1),
+              E  = c(letter_row, letter_col + 1),
+              SE = c(letter_row + 1, letter_col + 1),
+              S  = c(letter_row + 1, letter_col    ),
+              SW = c(letter_row + 1, letter_col - 1),
+              W  = c(letter_row, letter_col - 1),
+              NW = c(letter_row - 1, letter_col - 1))
+  
+  neigh <- neigh[!is.na(neigh) & str_detect(neigh, letter_filter)]
+  neigh_locs <- neigh_locs[names(neigh_locs) %in% names(neigh)]
+  return(list(neighbours = neigh,
+              neigh_row_col = neigh_locs))
+}
+
+xmas_count <- 0
+
+for (i in 1:nrow(x_locations)) {
+  curr_x <- x_locations[i,]
+  #find all the Ms next to the X
+  m_locations <- find_neighbours(curr_x[[1]], curr_x[[2]], day4_xmas_padded, "M")$neigh_row_col
+  print(paste("M locations for X number", i))
+  if (length(m_locations) == 0) {
+    next
+    }
+  for (j in 1:length(m_locations)) {
+    curr_m <- m_locations[[j]]
+    #find all the As next to the Ms
+    a_locations <- find_neighbours(curr_m[[1]], curr_m[[2]], day4_xmas_padded, "A")$neigh_row_col
+    print(paste("A locations for X number", i, "M number", j))
+    if (length(a_locations) == 0) {
+    next
+    }
+    for (k in 1:length(a_locations)) {
+      curr_a <- a_locations[[k]]
+      #find all the Ses next to the As
+      s_locations <- find_neighbours(curr_a[[1]], curr_a[[2]], day4_xmas_padded, "S")$neigh_row_col
+      print(paste("S locations for X number", i, "M number", j, "A number", k))
+      if (length(s_locations) == 0) {
+      next
+      }
+      xmas_count <- xmas_count + length(s_locations)
+      print(paste("Adding", length(s_locations), "to the count"))
+    }
+  }
+}
+
 ```
 
 
