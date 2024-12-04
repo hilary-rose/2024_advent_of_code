@@ -315,9 +315,6 @@ day4_xmas_padded <- rbind(rep(NA, ncol(day4_xmas)+6),
                           rep(NA, ncol(day4_xmas)+6),
                           rep(NA, ncol(day4_xmas)+6)) 
 
-
-x_locations <- which(day4_xmas_padded == "X", arr.ind = TRUE) #3668 Xes
-
 find_xmas <- function(wrdsrch, x_row, x_col) {
   possibilities <- c(
     #N
@@ -361,71 +358,12 @@ for (i in 1:nrow(x_locations)) {
   
 }
 
+xmas_count
 
 ```
 
 ### Part 2
 ```{r}
-# Similar to day 1, but have to remove any mul(x,y) instructions that come after the instruction don't() up to a new instruction do()
-
-#get all rows into one for regex
-corrupted <- glue::glue_collapse(day3_corrupted$messy)
-#locate end of strings which is index 2 (aka beginning of good or bad stretch)
-do_locations <- str_locate_all(corrupted, "do\\(\\)")[[1]][,2]
-dont_locations <- str_locate_all(corrupted, "don't\\(\\)")[[1]][,2]
-
-#get end locations for the DO and DONT calls (second half of unlisted result from str_extract)
-
-do_ranges <- tibble(locations = c(1, do_locations,dont_locations), #the 1 is for the initial "do" state
-       type = c(rep("do", length(do_locations) + 1),
-                rep("dont", length(dont_locations)))) %>%
-  arrange(locations) %>%
-  mutate(type_num_id = data.table::rleid(type)) %>%
-  group_by(type_num_id) %>%
-  slice_head() %>% #if 2 dos or don'ts in a row, no need for second one (just continues the same instruction)
-  ungroup() %>% 
-  #now everything is in do - dont order so can pivot to get the ranges
-  select(-type_num_id) %>%
-  mutate(row_id = rep(1:(nrow(.)/2), each = 2)) %>%
-  pivot_wider(names_from = type, values_from = locations) %>%
-  select(-row_id)
-  
-#now get mul locations (again, just need either the start or end point, not both, since we are finding the full string which will automatically be between the ranges)
-mul_locations <- str_locate_all(corrupted, "mul\\(\\d{1,3}\\,\\d{1,3}\\)")[[1]][,2]
-mul_products <- mul_products %>%
-  mutate(remove = FALSE)
-
-for (i in 1:length(mul_locations)) {
-  #for each mul location, check if it follows a do or a don't
-  location <- mul_locations[[i]]
-  in_range <- do_ranges %>%
-    dplyr::filter(location >= do & location <= dont)
-  if (nrow(in_range) > 0) {
-    next
-  } else {
-    mul_products$remove[[i]] <- TRUE
-  }
-}
-
-mul_products %>%
-  filter(remove == FALSE) %>%
-  summarize(total = sum(product))
-
-#---------------------------------------------------A better/faster way to do it:
-#extract only the do calls, don't calls, and mul calls, then filter out the don'ts
-
-
-str_extract_all(day3_corrupted_text, "((?<=mul\\()\\d{1,3}\\,\\d{1,3}(?=\\)))|(do\\(\\))|(don't\\(\\))") %>%
-  unlist() %>% 
-  as_tibble() %>%
-  mutate(do_dont = case_when(row_number() == 1 ~ "do()", 
-                             TRUE ~ str_extract(value, "d.*"))) %>% 
-  fill(do_dont, .direction = "down") %>% 
-  filter(do_dont == "do()" & value != "do()") %>% 
-  separate(value, into = c("mul1", "mul2"), sep = ",") %>% 
-  mutate(across(c(mul1, mul2), as.numeric)) %>% 
-  mutate(product = mul1*mul2) %>% 
-  summarize(total = sum(product))
 
 # New rules: find two MAS on the diagonal crossing... so now need to find A locations and check for diagonal M and S (somehow seems easier??)
 
@@ -461,6 +399,8 @@ for (i in 1:nrow(a_locations)) {
   x_mas_count <- x_mas_count + num_matches
   
 }
+
+x_mas_count
 
 ```
 
