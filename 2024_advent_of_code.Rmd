@@ -389,7 +389,7 @@ find_x_mas <- function(wrdsrch, a_row, a_col) {
   }
 }
 
-a_locations <- which(day4_xmas_padded == "A", arr.ind = TRUE) #3668 Xes
+a_locations <- which(day4_xmas_padded == "A", arr.ind = TRUE) #4882 As
 
 x_mas_count <- 0
 
@@ -405,16 +405,177 @@ x_mas_count
 ```
 
 
-## Day 5
+## Day 5 - Print Queue
 
 ### Part 1
 
 ```{r}
 
+#Hooo boy.... today we have to split the input data into two things, the first is the printing rules that indicate pages that must be printed before other pages (7|9 means page 7 must occur before 9) and the acutal printing jobs, which list page numbers. Have to check whether the printing orders satisfy every relevant rule, and if not, discard them. Then take the sum of all the middle page numbers.
+
+day5_rules <- read_delim(here("data/day5_input.txt"), delim = "|",
+                         col_names = c("occurs_before", "occurs_after")) %>%
+  filter(!is.na(occurs_after)) %>%
+  mutate(across(everything(), as.numeric))
+  
+#printing instructions are in a list as vectors of page numbers
+day5_printing <- as.tibble(read_lines(here("data/day5_input.txt"), skip = nrow(day5_rules)+1)) %>%
+  mutate(row_id = row_number()) %>%
+  separate_rows(value, sep = ",") %>%
+  mutate(value = as.numeric(value)) %>%
+  group_by(row_id) %>%
+  mutate(page_index = paste0("pg_", row_number())) %>%
+  pivot_wider(names_from = page_index, values_from = value) %>%
+  ungroup() %>%
+  group_split(row_id) %>% 
+  map(~discard(.x, is.na(.))[-1])
+
+#how many pages are in the rules?
+all_pages <- day5_rules %>% 
+  pivot_longer(c(occurs_before, occurs_after), names_to = "type", values_to = "pages") %>%
+  distinct(pages) %>%
+  pull(pages)
+
+num_pages_in_rules <- length(all_pages) 
+
+#Only 49 pages involved in rules. Would it be crazy to make a vector column orderd in a way that satisfies every rule, then filter it for each printing job and check if they are identical? 
+
+#Turns out that won't work, because some rules conflict with other rules so there is no one long chain of correct orders unfortunately. Adding that code to garbage chunk.
+
+#that isn't working. Try iterating over each number and checking in the rules if the preceding and follwing numbers are allowed. 
+
+get_rules <- function(input_vector) {
+  printing_job <- input_vector
+  relevant_rules <- day5_rules %>%
+    dplyr::filter(occurs_before %in% printing_job & occurs_after %in% printing_job)
+  return(relevant_rules)
+}
+
+correct_list <- c()
+incorrect_list <- c()
+
+for (i in 1:length(day5_printing)) {
+  curr_printing <- day5_printing[[i]]
+  curr_rules <- get_rules(curr_printing)
+  for (j in 1:length(curr_printing)) {
+    curr_page <- curr_printing[j]
+    before_pages <- case_when(j == 1 ~ NA,
+                              TRUE ~ curr_printing[1:(j-1)])
+    after_pages <- case_when(j == length(curr_printing) ~ NA,
+                             TRUE ~ curr_printing[(j+1):length(curr_printing)])
+    before_rules <- curr_rules %>%
+      dplyr::filter(occurs_after == curr_page)
+    after_rules <- curr_rules %>%
+      dplyr::filter(occurs_before == curr_page)
+    if (any(after_pages %in% before_rules$occurs_before) | any(before_pages %in% after_rules$occurs_after)) {
+      incorrect_list <- c(incorrect_list, i)
+      break #if any rules are broken, whole printing job is not correct
+    } else if (j == length(curr_printing)) {
+      correct_list <- c(correct_list, i) #if we make it all the way to the end of j and didn't break, then the printing job is good
+    }
+    
+  }
+  
+}
+
+#Now get the middle pages
+
+middle_indices <- floor(lengths(day5_printing[correct_list])/2)+1
+correct_printing <- day5_printing[correct_list]
+
+middle_numbers <- c()
+
+for (i in 1:length(correct_list)) {
+  middle_index <- middle_indices[i]
+  middle_number <- correct_printing[[i]][middle_index]
+  middle_numbers <- c(middle_numbers, middle_number)
+}
+
+sum(middle_numbers)
+
+
 ```
 
 ### Part 2
 ```{r}
+
+#Looks like some of my original code will be useful after all! Have to turn all the incorrect printing jobs into correct ones by ordering them right.
+
+#create function that spits out correct order
+make_correct <- function(input_vector) {
+  printing_job <- input_vector
+  relevant_rules <- day5_rules %>%
+    dplyr::filter(occurs_before %in% printing_job & occurs_after %in% printing_job)
+  
+  for (k in 1:length(printing_job)) {
+  
+  curr_page <- printing_job[[k]]
+  
+  if (k == 1) {
+    all_pages_in_order <- c(curr_page)
+  } else {
+    must_be_before <- relevant_rules %>%
+      dplyr::filter(occurs_before == curr_page) %>%
+      dplyr::filter(occurs_after %in% all_pages_in_order) 
+    if (nrow(must_be_before > 0)) {
+      before_indices <- which(all_pages_in_order %in% must_be_before$occurs_after)
+      before_target <- all_pages_in_order[min(before_indices)] #dplyr::filter to the lowest INDEX not value it must be before
+      must_be_before <- must_be_before %>%
+      dplyr::filter(occurs_after == before_target) %>%
+      pull(occurs_after)
+    } else {
+      must_be_before <- NA
+    }
+    before_index <- ifelse(is.na(must_be_before), NA, which(all_pages_in_order == must_be_before))
+    must_be_after <- relevant_rules %>%
+      dplyr::filter(occurs_after == curr_page) %>%
+      dplyr::filter(occurs_before %in% all_pages_in_order)  
+    if (nrow(must_be_after > 0)) {
+      after_indices <- which(all_pages_in_order %in% must_be_after$occurs_before)
+      after_target <- all_pages_in_order[max(after_indices)] #filter to the highest INDEX not value it must be after
+      must_be_after <- must_be_after %>%
+      dplyr::filter(occurs_before == after_target) %>%
+      pull(occurs_before)
+    } else {
+      must_be_after <- NA
+    }
+    after_index <- ifelse(is.na(must_be_after), NA, which(all_pages_in_order == must_be_after))
+    if (is.na(before_index) & is.na(after_index)) {
+      next
+    } else if (!is.na(before_index)) {
+      all_pages_in_order <- append(all_pages_in_order, curr_page, after = before_index - 1)
+    } else {
+      all_pages_in_order <- append(all_pages_in_order, curr_page, after = after_index)
+    }
+  }
+  }
+  return(all_pages_in_order)
+}
+
+
+incorrect_printing <- day5_printing[incorrect_list]
+
+corrected_list <- list()
+
+for (l in 1:length(incorrect_printing)) {
+  curr_printing <- incorrect_printing[[l]]
+  corrected <- make_correct(curr_printing)
+  corrected_list[[l]] <- corrected
+}
+
+#Now get the middle pages
+
+middle_indices <- floor(lengths(corrected_list)/2)+1
+
+middle_numbers <- c()
+
+for (i in 1:length(corrected_list)) {
+  middle_index <- middle_indices[i]
+  middle_number <- corrected_list[[i]][middle_index]
+  middle_numbers <- c(middle_numbers, middle_number)
+}
+
+sum(middle_numbers)
 
 ```
 
@@ -517,6 +678,112 @@ for (i in 1:nrow(x_locations)) {
     }
   }
 }
+
+#Day 5
+
+
+all_pages_in_order <- c()
+
+for (i in 1:num_pages_in_rules) {
+  
+  curr_page <- all_pages[[i]]
+  
+  if (i == 1) {
+    all_pages_in_order <- c(all_pages_in_order, curr_page)
+  } else {
+    must_be_before <- day5_rules %>%
+      filter(occurs_before == curr_page) %>%
+      filter(occurs_after %in% all_pages_in_order) 
+    if (nrow(must_be_before > 0)) {
+      must_be_before <- must_be_before %>%
+      #filter to the lowest value it must be before
+      filter(occurs_after == min(occurs_after)) %>%
+      pull(occurs_after)
+    } else {
+      must_be_before <- NA
+    }
+    before_index <- ifelse(is.na(must_be_before), NA, which(all_pages_in_order == must_be_before))
+    must_be_after <- day5_rules %>%
+      filter(occurs_after == curr_page) %>%
+      filter(occurs_before %in% all_pages_in_order)  
+    if (nrow(must_be_after > 0)) {
+      must_be_after <- must_be_after %>%
+      #filter to the highest value it must be after
+      filter(occurs_before == max(occurs_before)) %>%
+      pull(occurs_before)
+    } else {
+      must_be_after <- NA
+    }
+    after_index <- ifelse(is.na(must_be_after), NA, which(all_pages_in_order == must_be_after))
+    if (is.na(before_index) & is.na(after_index)) {
+      next
+    } else if (!is.na(before_index)) {
+      all_pages_in_order <- append(all_pages_in_order, curr_page, after = before_index - 1)
+    } else {
+      all_pages_in_order <- append(all_pages_in_order, curr_page, after = after_index)
+    }
+  }
+}
+
+
+get_rules <- function(input_vector) {
+  printing_job <- input_vector
+  relevant_rules <- day5_rules %>%
+    dplyr::filter(occurs_before %in% printing_job & occurs_after %in% printing_job)
+  
+  for (i in 1:length(printing_job)) {
+  
+  curr_page <- printing_job[[i]]
+  
+  if (i == 1) {
+    all_pages_in_order <- c(curr_page)
+  } else {
+    must_be_before <- relevant_rules %>%
+      dplyr::filter(occurs_before == curr_page) %>%
+      dplyr::filter(occurs_after %in% all_pages_in_order) 
+    if (nrow(must_be_before > 0)) {
+      must_be_before <- must_be_before %>%
+      #dplyr::filter to the lowest value it must be before
+      dplyr::filter(occurs_after == min(occurs_after)) %>%
+      pull(occurs_after)
+    } else {
+      must_be_before <- NA
+    }
+    before_index <- ifelse(is.na(must_be_before), NA, which(all_pages_in_order == must_be_before))
+    must_be_after <- relevant_rules %>%
+      dplyr::filter(occurs_after == curr_page) %>%
+      dplyr::filter(occurs_before %in% all_pages_in_order)  
+    if (nrow(must_be_after > 0)) {
+      must_be_after <- must_be_after %>%
+      #dplyr::filter to the highest value it must be after
+      dplyr::filter(occurs_before == max(occurs_before)) %>%
+      pull(occurs_before)
+    } else {
+      must_be_after <- NA
+    }
+    after_index <- ifelse(is.na(must_be_after), NA, which(all_pages_in_order == must_be_after))
+    if (is.na(before_index) & is.na(after_index)) {
+      next
+    } else if (!is.na(before_index)) {
+      all_pages_in_order <- append(all_pages_in_order, curr_page, after = before_index - 1)
+    } else {
+      all_pages_in_order <- append(all_pages_in_order, curr_page, after = after_index)
+    }
+  }
+  }
+  return(all_pages_in_order)
+}
+
+correct_list <- c()
+
+for (i in 1:length(day5_printing)) {
+  curr_printing <- day5_printing[[i]]
+  curr_rules <- get_rules(curr_printing)
+  if(identical(curr_rules, curr_printing)) {
+    correct_list <- c(correct_list, i)
+  }
+}
+
 
 ```
 
