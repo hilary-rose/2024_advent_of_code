@@ -580,10 +580,192 @@ sum(middle_numbers)
 ```
 
 
-## Day 6
+## Day 6 - Guard Gallivant
 
 ### Part 1
 
+```{r}
+
+#find the path of the guard. Starting position indicated by "^". Guard first travels north, then makes a 90 degree turn every time she comes to an obstacle ("#"). Have to count all the DISTINCT squares traveled on by the guard including the first one for the answer... or could change the value of the text on the matrix, then count those. Maybe keep a running list of squares travelled and keep unique ones at the end. Have a direction variable first set to "north" that changes every time an obstacle is hit. The path ends when the guard walks off the map. Could pad the matrix with NAs and when NA is hit, it ends.
+
+day6_patrol <- as.matrix(read_fwf(here("data/day6_input.txt"), fwf_widths(widths = rep(1,130))))
+
+start_row_col <- which(day6_patrol == "^", arr.ind = T)
+
+directions <- c("north", "east", "south", "west")
+
+visited_spaces <- 0
+
+patrol_path <- function(patrol_map, rw, cl, direc) {
+  while (rw >= 1 & rw <= length(patrol_map[,1]) & cl >= 1 & cl <= length(patrol_map[1,])) {
+  # Check if at obstacle or already visited square
+  if (patrol_map[rw, cl] == "X"){
+    #do nothing
+  } else if (patrol_map[rw, cl] == "#"){
+    print(paste('obstacle in square: ', rw, cl))
+    #reset x and y
+    if (direc == "north") {
+      rw <- rw + 1
+    } else if (direc == "east") {
+      cl <- cl - 1
+    } else if (direc == "south") {
+      rw <- rw - 1
+    } else if (direc == "west") {
+      cl <- cl + 1
+    }
+    #set new direction of travel
+    if (direc == "west") {
+      direc <- "north"
+      } else {
+          direc <- directions[which(directions == direc) + 1]
+        }
+  } else {
+  # Set point as visited
+  patrol_map[rw,cl] <- "X"
+  visited_spaces <<- visited_spaces + 1
+  }
+  
+  # Set up next move based on direction of travel
+  if (direc == "north") {
+   # patrol_path(patrol_map, rw - 1, cl, direc)
+    rw <- rw - 1
+  } else if (direc == "east") {
+   # patrol_path(patrol_map, rw, cl + 1, direc)
+    cl <- cl + 1
+  } else if (direc == "south") {
+   # patrol_path(patrol_map, rw + 1, cl, direc)
+    rw <- rw + 1
+  } else if (direc == "west") {
+   # patrol_path(patrol_map, rw, cl - 1, direc)
+    cl <- cl - 1
+  }
+
+  }
+}
+
+patrol_path(day6_patrol, rw = start_row_col[[1]], cl = start_row_col[[2]], "north")
+
+```
+
+### Part 2
+```{r}
+
+#Now have to find all the places where one new obstacle will force the patrol guard into a loop
+
+#code seems stuck in an endless loop so my loop catchers aren't working. Instead, can you check, for every "#", whether there is another "#" one row down and to the right, and then from that one one row left and down, and then from that one one row up and to the left, and for that one whether it is one column to the left of the first one. Then check that everything in between is not "#" and you have found a loop.
+
+available_spaces <- which(day6_patrol %notin% c("#", "^"))
+loop_count <- 0
+
+
+#for newly placed "#", check if it forms a look as any possible corner of a box. If so, count it. If that doesn't give the right answer, then have to save "#" locations and actually walk through the patrol to see if the guard doesn't get stuck in some of the loops.
+
+check_for_loop <- function(patrol_map, rw, cl, direc, obs_count) {
+  #set all 4 obstacles as the first square for now
+  obs_n <- c(rw, cl)
+  obs_e <- c(rw, cl)
+  obs_s <- c(rw, cl)
+  obs_w <- c(rw, cl)
+  east_route <- list()
+  east_moves <- c()
+  #run the following loop only while patroller in bounds or when not stuck in a loop
+  #this works but only for square loops, not figure 8 type ones... how to capture those? If the guard has the exact same east route twice (from same start point to end point on a row), then they are in a loop, no?
+  while (rw >= 1 & rw <= length(patrol_map[,1]) & cl >= 1 & cl <= length(patrol_map[1,]) & obs_count == 0) {
+    #if there are repeats in the east moves, then the guard is looping, so add to the count and break out
+    if (length(unique(east_route)) < length(east_route)) {
+      loop_count <<- loop_count + 1
+      print("Loop found")
+      break
+    }
+  # Check if at obstacle 
+  if (patrol_map[rw, cl] == "#"){
+    #print(paste('obstacle in square: ', rw, cl))
+    #reset x and y
+    if (direc == "north") {
+      rw <- rw + 1
+      if (identical(c(rw, cl), obs_n)) {
+        print("Loop found")
+        loop_count <<- loop_count + 1
+        obs_count <- 1
+      }
+      obs_n <- c(rw, cl)
+    } else if (direc == "east") {
+      cl <- cl - 1
+      #we have hit an east obstacle, so take stock of east moves and then reset
+        east_route[length(east_route)+1] <- list(east_moves)
+        east_moves <- c() 
+      if (identical(c(rw, cl), obs_e)) {
+        print("Loop found")
+        loop_count <<- loop_count + 1
+        obs_count <- 1
+      }
+      obs_e <- c(rw, cl)
+    } else if (direc == "south") {
+      rw <- rw - 1
+      if (identical(c(rw, cl), obs_s)) {
+        print("Loop found")
+        loop_count <<- loop_count + 1
+        obs_count <- 1
+      }
+      obs_s <- c(rw, cl)
+    } else if (direc == "west") {
+      cl <- cl + 1
+      if (identical(c(rw, cl), obs_w)) {
+        print("Loop found")
+        loop_count <<- loop_count + 1
+        obs_count <- 1
+      }
+      obs_w <- c(rw, cl)
+    }
+    #set new direction of travel
+    if (direc == "west") {
+      direc <- "north"
+      } else {
+          direc <- directions[which(directions == direc) + 1]
+      }
+  } 
+  
+  # Set up next move based on direction of travel
+  if (direc == "north") {
+    rw <- rw - 1
+  } else if (direc == "east") {
+    east_moves <- c(list(east_moves), list(c(rw, cl))) 
+    cl <- cl + 1
+  } else if (direc == "south") {
+    rw <- rw + 1
+  } else if (direc == "west") {
+    cl <- cl - 1
+  }
+  }
+}
+
+loop_count <- 0
+
+chunks <- seq(0, 16080, by = 201)
+
+for (k in 1:(length(chunks)-1)) {
+  
+  available <- available_spaces[(chunks[k]+1):(chunks[(k+1)])]
+
+for (j in 1:length(available)) {
+  obs_location <- available[j]
+  new_patrol_map <- day6_patrol
+  new_patrol_map[obs_location] <- "#"
+  print(paste("checking", j, "for loops"))
+  check_for_loop(new_patrol_map, rw = start_row_col[[1]], cl = start_row_col[[2]], "north", obs_count = 0)
+}
+  beepr::beep()
+  Sys.sleep(.5)
+  print(paste("Finished part", i, "of", length(chunks)-1))
+}
+
+#well, it takes 90 minutes to run but it works hahaha
+
+```
+
+# Day 7 - Bridge Repair
+
+### Part 1
 ```{r}
 
 ```
@@ -593,6 +775,83 @@ sum(middle_numbers)
 
 ```
 
+
+# Day 8 -
+
+### Part 1
+```{r}
+
+```
+
+### Part 2
+```{r}
+
+```
+
+
+# Day 9 -
+
+### Part 1
+```{r}
+
+```
+
+### Part 2
+```{r}
+
+```
+
+
+# Day 10 -
+
+### Part 1
+```{r}
+
+```
+
+### Part 2
+```{r}
+
+```
+
+
+# Day 11 -
+
+### Part 1
+```{r}
+
+```
+
+### Part 2
+```{r}
+
+```
+
+
+# Day 12 -
+
+### Part 1
+```{r}
+
+```
+
+### Part 2
+```{r}
+
+```
+
+
+# Day 13 -
+
+### Part 1
+```{r}
+
+```
+
+### Part 2
+```{r}
+
+```
 
 
 ```{r garbage}
@@ -782,6 +1041,113 @@ for (i in 1:length(day5_printing)) {
   if(identical(curr_rules, curr_printing)) {
     correct_list <- c(correct_list, i)
   }
+}
+
+
+#Day 6 Part 1
+
+patrol_path <- function(patrol_map, rw, cl, direc) {
+  while (rw >= 1 & rw <= length(patrol_map[,1]) & cl >= 1 & cl <= length(patrol_map[1,])) {
+  # Check if out of bounds
+  # if (rw < 1 | rw > length(patrol_map[,1])) {
+  #   print(paste("Patroller has left the room after stepping on", length(patrol_map[patrol_map == "X"]), "spaces.")) 
+  #   return (F) 
+  # }
+  # if (cl < 1 | cl > length(patrol_map[1,])) {
+  #   print(paste("Patroller has left the room after stepping on", length(patrol_map[patrol_map == "X"]), "spaces.")) 
+  #   return (F) 
+  #   }
+  # Check if at obstacle or already visited square
+  if (patrol_map[rw, cl] == "X"){
+    #print(paste('already visited square: ', rw, cl))
+    #return(TRUE)
+  } else if (patrol_map[rw, cl] == "#"){
+    print(paste('obstacle in square: ', rw, cl))
+    #reset x and y
+    if (direc == "north") {
+      rw <- rw + 1
+    } else if (direc == "east") {
+      cl <- cl - 1
+    } else if (direc == "south") {
+      rw <- rw - 1
+    } else if (direc == "west") {
+      cl <- cl + 1
+    }
+    #set new direction of travel
+    if (direc == "west") {
+      direc <- "north"
+      } else {
+          direc <- directions[which(directions == direc) + 1]
+        }
+    #return(FALSE)
+  } else {
+  # Set point as visited
+  patrol_map[rw,cl] <- "X"
+  visited_spaces <<- visited_spaces + 1
+  #print(paste('visiting square: ', rw, cl))
+  }
+  
+  # Set up next move based on direction of travel
+  if (direc == "north") {
+   # patrol_path(patrol_map, rw - 1, cl, direc)
+    rw <- rw - 1
+  } else if (direc == "east") {
+   # patrol_path(patrol_map, rw, cl + 1, direc)
+    cl <- cl + 1
+  } else if (direc == "south") {
+   # patrol_path(patrol_map, rw + 1, cl, direc)
+    rw <- rw + 1
+  } else if (direc == "west") {
+   # patrol_path(patrol_map, rw, cl - 1, direc)
+    cl <- cl - 1
+  }
+
+  }
+}
+
+#Day 6 Part 2
+
+
+
+
+check_for_loop <- function(patrol_map) {
+  #remove locations from bottom row and first and last columns to avoid going out of bounds
+  patrol_map_truncated <- patrol_map[1:(length(patrol_map[1,])-1), 2:(length(patrol_map[,1])-1)]
+  obs_locations <- which(patrol_map_truncated == "#", arr.ind = T)
+  for (i in 1:nrow(obs_locations)) {
+    rw <- obs_locations[i,][[1]]
+    cl <- obs_locations[i,][[2]]
+    #check no obstacle directly below
+      if (patrol_map[(rw+1),cl] == "#") {
+        next
+      }
+    #northeast obstacle
+    if (any(patrol_map[(rw+1), (cl+1):length(patrol_map[1,])] == "#")) {
+      ne_obs_cl <- min(which(patrol_map[rw+1,(cl+1):length(patrol_map[1,])] == "#")) + cl
+    } else {
+      next
+    }
+    #southeast obstacle
+    if (any(patrol_map[(rw+1):length(patrol_map[,1]), (ne_obs_cl-1)] == "#")) {
+      se_obs_rw <- min(which(patrol_map[(rw+1):length(patrol_map[,1]), (ne_obs_cl-1)] == "#")) + rw
+    } else {
+      next
+    }
+    #if there is a southwest obstacle in the right position, we have found a loop, move to next iteration
+    if (patrol_map[(se_obs_rw-1), (cl-1)] == "#") {
+      loop_count <<- loop_count + 1
+      next
+    } else {
+      next
+    }
+  }
+}
+
+for (j in 1:length(available_spaces)) {
+  obs_location <- available_spaces[j]
+  new_patrol_map <- day6_patrol
+  new_patrol_map[obs_location] <- "#"
+  check_for_loop(new_patrol_map)
 }
 
 
